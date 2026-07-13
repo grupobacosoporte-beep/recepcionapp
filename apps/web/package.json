@@ -1,6 +1,11 @@
 {
-  "name": "web",
+  "name": "baco-recepcion-web",
+  "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -17,7 +22,7 @@
     "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.45.0",
     "jose": "^5.9.0",
-    "next": "14.2.15",
+    "next": "^14.2.15",
     "pdf.js-extract": "^0.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
