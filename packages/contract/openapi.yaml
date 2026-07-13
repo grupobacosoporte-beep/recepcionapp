@@ -1,0 +1,608 @@
+openapi: 3.0.3
+info:
+  title: Plataforma de Recepción Baco — API
+  version: 1.0.0
+  description: >
+    Contrato de la API (Fase 0). Consumida por el Panel Web y por la app PDA.
+    Autenticación por JWT emitido por Supabase Auth; autorización (RBAC con
+    ámbito de local) resuelta en el servidor.
+servers:
+  - url: /api/v1
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+  - name: Catalog
+  - name: Receptions
+  - name: PDA
+  - name: Reports
+  - name: Audit
+
+paths:
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Perfil, roles, permisos y locales del usuario autenticado
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /catalog/branches:
+    get:
+      tags: [Catalog]
+      summary: Lista locales
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Branch" }
+    post:
+      tags: [Catalog]
+      summary: Crea local (branch.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BranchInput" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Branch" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /catalog/suppliers:
+    get:
+      tags: [Catalog]
+      summary: Lista proveedores
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Supplier" }
+    post:
+      tags: [Catalog]
+      summary: Crea proveedor (supplier.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SupplierInput" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Supplier" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /catalog/products:
+    get:
+      tags: [Catalog]
+      summary: Lista productos
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Product" }
+    post:
+      tags: [Catalog]
+      summary: Crea producto (product.manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductInput" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /catalog/maestro/versions:
+    get:
+      tags: [Catalog]
+      summary: Lista versiones del MAESTRO
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MaestroVersion" }
+    post:
+      tags: [Catalog]
+      summary: Sube una nueva versión del MAESTRO (maestro.manage)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                label: { type: string }
+                file: { type: string, format: binary }
+              required: [label, file]
+      responses:
+        "201":
+          description: Versión creada (incluye conflictos detectados)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaestroLoadResult" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /catalog/maestro/version:
+    get:
+      tags: [Catalog]
+      summary: Versión activa del MAESTRO (para el PDA)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MaestroVersion" }
+
+  /receptions:
+    get:
+      tags: [Receptions]
+      summary: Lista recepciones (reception.view)
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/ReceptionStatus" } }
+        - { name: branchId, in: query, schema: { type: string, format: uuid } }
+        - { name: supplierId, in: query, schema: { type: string, format: uuid } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Reception" }
+    post:
+      tags: [Receptions]
+      summary: Crea recepción subiendo el PDF de surtido (reception.create)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                number: { type: string }
+                branchId: { type: string, format: uuid }
+                supplierId: { type: string, format: uuid }
+                surtido: { type: string, format: binary }
+              required: [number, branchId, surtido]
+      responses:
+        "201":
+          description: Recepción creada con cartones y líneas esperadas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Reception" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /receptions/{id}:
+    get:
+      tags: [Receptions]
+      summary: Detalle de recepción (reception.view)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReceptionDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /receptions/{id}/assign:
+    post:
+      tags: [Receptions]
+      summary: Asigna operador (reception.assign)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assignedUserId: { type: string, format: uuid }
+              required: [assignedUserId]
+      responses:
+        "200":
+          description: Asignada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Reception" }
+
+  /receptions/{id}/progress:
+    get:
+      tags: [Receptions]
+      summary: Avance para polling (reception.view)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReceptionProgress" }
+
+  /receptions/{id}/finish:
+    post:
+      tags: [Receptions]
+      summary: Cierra la recepción (reception.assign)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: Finalizada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReceptionDetail" }
+
+  /receptions/{id}/differences:
+    get:
+      tags: [Receptions]
+      summary: Diferencias de la recepción (reception.view)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Difference" }
+
+  /pda/receptions:
+    get:
+      tags: [PDA]
+      summary: Recepciones asignadas al operador (reception.scan)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Reception" }
+
+  /pda/receptions/{id}/bundle:
+    get:
+      tags: [PDA]
+      summary: Recepción + snapshot del MAESTRO para trabajo offline (reception.scan)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReceptionBundle" }
+
+  /pda/sync:
+    post:
+      tags: [PDA]
+      summary: Sincroniza un lote idempotente de eventos de escaneo (reception.scan)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SyncRequest" }
+      responses:
+        "200":
+          description: Lote aplicado; devuelve estado autoritativo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncResponse" }
+
+  /dashboard/summary:
+    get:
+      tags: [Reports]
+      summary: Indicadores del dashboard (dashboard.view)
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: branchId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardSummary" }
+
+  /audit:
+    get:
+      tags: [Audit]
+      summary: Bitácora de auditoría (audit.view)
+      parameters:
+        - { name: entity, in: query, schema: { type: string } }
+        - { name: entityId, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditLog" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: No autenticado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Sin permiso o fuera de ámbito de local
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: No encontrado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
+      required: [code, message]
+
+    ReceptionStatus:
+      type: string
+      enum: [PENDIENTE, EN_PROCESO, FINALIZADA]
+
+    DifferenceType:
+      type: string
+      enum: [FALTANTE, SOBRANTE, EXCESO, NO_IDENTIFICADO, UBICACION]
+
+    ScanResultType:
+      type: string
+      enum: [RECIBIDO_ESPERADO, SOBRANTE_NO_SOLICITADO, CODIGO_NO_IDENTIFICADO, LECTURA_INVALIDA, CONFLICTO_MAESTRO]
+
+    Me:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        fullName: { type: string }
+        roles:
+          type: array
+          items: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+        branches:
+          type: array
+          items: { $ref: "#/components/schemas/Branch" }
+
+    Branch:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        active: { type: boolean }
+    BranchInput:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+      required: [code, name]
+
+    Supplier:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        active: { type: boolean }
+    SupplierInput:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+      required: [code, name]
+
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sku: { type: string }
+        description: { type: string }
+        active: { type: boolean }
+    ProductInput:
+      type: object
+      properties:
+        sku: { type: string }
+        description: { type: string }
+      required: [sku, description]
+
+    MaestroVersion:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    MaestroConflict:
+      type: object
+      properties:
+        barcodeNormalized: { type: string }
+        skus:
+          type: array
+          items: { type: string }
+    MaestroLoadResult:
+      type: object
+      properties:
+        versionId: { type: string, format: uuid }
+        rows: { type: integer }
+        uniqueCodes: { type: integer }
+        uniqueSkus: { type: integer }
+        conflicts:
+          type: array
+          items: { $ref: "#/components/schemas/MaestroConflict" }
+
+    Reception:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        status: { $ref: "#/components/schemas/ReceptionStatus" }
+        branchId: { type: string, format: uuid }
+        supplierId: { type: string, format: uuid, nullable: true }
+        assignedUserId: { type: string, format: uuid, nullable: true }
+        maestroVersionId: { type: string, format: uuid, nullable: true }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+
+    ReceptionBox:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        boxCode: { type: string }
+    ExpectedLine:
+      type: object
+      properties:
+        boxCode: { type: string }
+        sku: { type: string }
+        expectedQty: { type: integer }
+    ReceptionDetail:
+      allOf:
+        - $ref: "#/components/schemas/Reception"
+        - type: object
+          properties:
+            boxes:
+              type: array
+              items: { $ref: "#/components/schemas/ReceptionBox" }
+            expectedLines:
+              type: array
+              items: { $ref: "#/components/schemas/ExpectedLine" }
+
+    ReceptionProgress:
+      type: object
+      properties:
+        status: { $ref: "#/components/schemas/ReceptionStatus" }
+        totalExpected: { type: integer }
+        totalReceived: { type: integer }
+        totalRemaining: { type: integer }
+        surplus: { type: integer }
+        unidentified: { type: integer }
+        lastScanAt: { type: string, format: date-time, nullable: true }
+
+    Difference:
+      type: object
+      properties:
+        sku: { type: string }
+        type: { $ref: "#/components/schemas/DifferenceType" }
+        expected: { type: integer }
+        received: { type: integer }
+        qty: { type: integer }
+
+    ReceptionBundle:
+      type: object
+      properties:
+        reception: { $ref: "#/components/schemas/ReceptionDetail" }
+        maestroVersion: { $ref: "#/components/schemas/MaestroVersion" }
+        maestroCodes:
+          type: array
+          items:
+            type: object
+            properties:
+              sku: { type: string }
+              barcodeNormalized: { type: string }
+
+    ScanEventInput:
+      type: object
+      properties:
+        idempotencyKey: { type: string }
+        boxCode: { type: string, nullable: true }
+        rawCode: { type: string }
+        normalizedCode: { type: string }
+        sku: { type: string, nullable: true }
+        resultType: { $ref: "#/components/schemas/ScanResultType" }
+        qty: { type: integer }
+        occurredAt: { type: string, format: date-time }
+      required: [idempotencyKey, rawCode, normalizedCode, resultType, qty, occurredAt]
+
+    SyncRequest:
+      type: object
+      properties:
+        receptionId: { type: string, format: uuid }
+        deviceId: { type: string }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/ScanEventInput" }
+      required: [receptionId, events]
+
+    SyncResponse:
+      type: object
+      properties:
+        appliedKeys:
+          type: array
+          items: { type: string }
+        progress: { $ref: "#/components/schemas/ReceptionProgress" }
+
+    DashboardSummary:
+      type: object
+      properties:
+        receptionsToday: { type: integer }
+        receptionsPending: { type: integer }
+        receptionsFinished: { type: integer }
+        avgReceptionMinutes: { type: number }
+        totalShortages: { type: integer }
+        totalSurplus: { type: integer }
+        differencesBySupplier:
+          type: array
+          items:
+            type: object
+            properties:
+              supplier: { type: string }
+              differences: { type: integer }
+
+    AuditLog:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        actorUserId: { type: string, format: uuid, nullable: true }
+        action: { type: string }
+        entity: { type: string }
+        entityId: { type: string, nullable: true }
+        at: { type: string, format: date-time }

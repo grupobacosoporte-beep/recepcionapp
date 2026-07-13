@@ -1,7 +1,7 @@
 {
   "name": "baco-logistica",
   "private": true,
-  "packageManager": "pnpm@9",
+  "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
@@ -9,6 +9,6 @@
     "test": "turbo run test"
   },
   "devDependencies": {
-    "turbo": "^2.0.0"
+    "turbo": "^2.3.3"
   }
 }

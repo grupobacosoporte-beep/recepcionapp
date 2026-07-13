@@ -1,0 +1,312 @@
+// Plataforma de Recepción Baco — Modelo de datos (Fase 0)
+// Postgres (Neon). Identidad en Supabase; el resto vive aquí.
+// Convenciones: PK uuid, created_at/updated_at, borrado lógico (active),
+// alcance multi-local vía branch_id.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------- Enums -----------------------------
+
+enum ReceptionStatus {
+  PENDIENTE
+  EN_PROCESO
+  FINALIZADA
+}
+
+enum DifferenceType {
+  FALTANTE
+  SOBRANTE
+  EXCESO
+  NO_IDENTIFICADO
+  UBICACION
+}
+
+enum ScanResultType {
+  RECIBIDO_ESPERADO
+  SOBRANTE_NO_SOLICITADO
+  CODIGO_NO_IDENTIFICADO
+  LECTURA_INVALIDA
+  CONFLICTO_MAESTRO
+}
+
+enum ScanSource {
+  ESCANER
+  MANUAL
+}
+
+enum FileKind {
+  SURTIDO_PDF
+  MAESTRO_XLSX
+  REPORT_XLSX
+}
+
+// --------------------------- IAM / RBAC ---------------------------
+
+model Branch {
+  id        String    @id @default(uuid()) @db.Uuid
+  code      String    @unique
+  name      String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  userRoles  UserRole[]
+  receptions Reception[]
+
+  @@map("branch")
+}
+
+// Perfil de app. El id ES el uid de Supabase (no autogenerado).
+model UserProfile {
+  id        String    @id @db.Uuid
+  email     String    @unique
+  fullName  String    @map("full_name")
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  roles             UserRole[]
+  assignedReceptions Reception[] @relation("AssignedReceptions")
+  createdReceptions  Reception[] @relation("CreatedReceptions")
+  auditLogs          AuditLog[]
+
+  @@map("user_profile")
+}
+
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  key         String           @unique // SUPER_ADMIN, QF_ADMIN, SUPERVISOR, OPERADOR
+  name        String
+  permissions RolePermission[]
+  userRoles   UserRole[]
+
+  @@map("role")
+}
+
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  key         String           @unique // reception.create, maestro.manage, ...
+  description String
+  roles       RolePermission[]
+
+  @@map("permission")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permission")
+}
+
+// Rol asignado con ámbito de local (branchId null = global).
+model UserRole {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String      @map("user_id") @db.Uuid
+  roleId    String      @map("role_id") @db.Uuid
+  branchId  String?     @map("branch_id") @db.Uuid
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  branch    Branch?     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, branchId])
+  @@index([userId])
+  @@map("user_role")
+}
+
+// --------------------------- Catálogo ---------------------------
+
+model Supplier {
+  id        String      @id @default(uuid()) @db.Uuid
+  code      String      @unique
+  name      String
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  receptions Reception[]
+
+  @@map("supplier")
+}
+
+model Product {
+  id          String   @id @default(uuid()) @db.Uuid
+  sku         String   @unique
+  description String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("product")
+}
+
+model MaestroVersion {
+  id        String        @id @default(uuid()) @db.Uuid
+  label     String
+  active    Boolean       @default(false)
+  createdAt DateTime      @default(now()) @map("created_at")
+  createdBy String?       @map("created_by") @db.Uuid
+  codes     MaestroCode[]
+  receptions Reception[]
+
+  @@map("maestro_version")
+}
+
+model MaestroCode {
+  id                String         @id @default(uuid()) @db.Uuid
+  versionId         String         @map("version_id") @db.Uuid
+  sku               String
+  barcodeNormalized String         @map("barcode_normalized")
+  rawBarcode        String         @map("raw_barcode")
+  version           MaestroVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, barcodeNormalized])
+  @@index([versionId, sku])
+  @@map("maestro_code")
+}
+
+// --------------------------- Recepción ---------------------------
+
+model Reception {
+  id               String          @id @default(uuid()) @db.Uuid
+  number           String
+  status           ReceptionStatus @default(PENDIENTE)
+  branchId         String          @map("branch_id") @db.Uuid
+  supplierId       String?         @map("supplier_id") @db.Uuid
+  assignedUserId   String?         @map("assigned_user_id") @db.Uuid
+  maestroVersionId String?         @map("maestro_version_id") @db.Uuid
+  startedAt        DateTime?       @map("started_at")
+  finishedAt       DateTime?       @map("finished_at")
+  createdBy        String?         @map("created_by") @db.Uuid
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  branch        Branch          @relation(fields: [branchId], references: [id])
+  supplier      Supplier?       @relation(fields: [supplierId], references: [id])
+  assignedUser  UserProfile?    @relation("AssignedReceptions", fields: [assignedUserId], references: [id])
+  creator       UserProfile?    @relation("CreatedReceptions", fields: [createdBy], references: [id])
+  maestroVersion MaestroVersion? @relation(fields: [maestroVersionId], references: [id])
+
+  boxes         ReceptionBox[]
+  expectedLines ExpectedLine[]
+  receivedItems ReceivedItem[]
+  differences   Difference[]
+  scanEvents    ScanEvent[]
+  files         FileAsset[]
+
+  @@index([branchId, status])
+  @@index([assignedUserId])
+  @@map("reception")
+}
+
+model ReceptionBox {
+  id          String         @id @default(uuid()) @db.Uuid
+  receptionId String         @map("reception_id") @db.Uuid
+  boxCode     String         @map("box_code")
+  reception   Reception      @relation(fields: [receptionId], references: [id], onDelete: Cascade)
+  expectedLines ExpectedLine[]
+  receivedItems ReceivedItem[]
+
+  @@unique([receptionId, boxCode])
+  @@map("reception_box")
+}
+
+model ExpectedLine {
+  id          String        @id @default(uuid()) @db.Uuid
+  receptionId String        @map("reception_id") @db.Uuid
+  boxId       String        @map("box_id") @db.Uuid
+  sku         String
+  expectedQty Int           @map("expected_qty")
+  reception   Reception     @relation(fields: [receptionId], references: [id], onDelete: Cascade)
+  box         ReceptionBox  @relation(fields: [boxId], references: [id], onDelete: Cascade)
+
+  @@index([receptionId, sku])
+  @@map("expected_line")
+}
+
+model ReceivedItem {
+  id          String       @id @default(uuid()) @db.Uuid
+  receptionId String       @map("reception_id") @db.Uuid
+  boxId       String       @map("box_id") @db.Uuid
+  sku         String
+  qty         Int          @default(0)
+  recognized  Boolean      @default(false)
+  source      ScanSource   @default(ESCANER)
+  reception   Reception    @relation(fields: [receptionId], references: [id], onDelete: Cascade)
+  box         ReceptionBox @relation(fields: [boxId], references: [id], onDelete: Cascade)
+
+  @@unique([receptionId, boxId, sku])
+  @@map("received_item")
+}
+
+model Difference {
+  id          String         @id @default(uuid()) @db.Uuid
+  receptionId String         @map("reception_id") @db.Uuid
+  sku         String
+  type        DifferenceType
+  expected    Int            @default(0)
+  received    Int            @default(0)
+  qty         Int            @default(0)
+  reception   Reception      @relation(fields: [receptionId], references: [id], onDelete: Cascade)
+
+  @@index([receptionId, type])
+  @@map("difference")
+}
+
+model ScanEvent {
+  id             String         @id @default(uuid()) @db.Uuid
+  receptionId    String         @map("reception_id") @db.Uuid
+  boxCode        String?        @map("box_code")
+  rawCode        String         @map("raw_code")
+  normalizedCode String         @map("normalized_code")
+  sku            String?
+  resultType     ScanResultType @map("result_type")
+  qty            Int            @default(1)
+  deviceId       String?        @map("device_id")
+  userId         String?        @map("user_id") @db.Uuid
+  occurredAt     DateTime       @map("occurred_at")
+  idempotencyKey String         @unique @map("idempotency_key")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  reception      Reception      @relation(fields: [receptionId], references: [id], onDelete: Cascade)
+
+  @@index([receptionId])
+  @@map("scan_event")
+}
+
+model FileAsset {
+  id          String     @id @default(uuid()) @db.Uuid
+  receptionId String?    @map("reception_id") @db.Uuid
+  kind        FileKind
+  blobUrl     String     @map("blob_url")
+  uploadedBy  String?    @map("uploaded_by") @db.Uuid
+  createdAt   DateTime   @default(now()) @map("created_at")
+  reception   Reception? @relation(fields: [receptionId], references: [id], onDelete: SetNull)
+
+  @@map("file_asset")
+}
+
+// --------------------------- Auditoría ---------------------------
+
+model AuditLog {
+  id          String      @id @default(uuid()) @db.Uuid
+  actorUserId String?     @map("actor_user_id") @db.Uuid
+  action      String
+  entity      String
+  entityId    String?     @map("entity_id")
+  before      Json?
+  after       Json?
+  at          DateTime    @default(now())
+  actor       UserProfile? @relation(fields: [actorUserId], references: [id])
+
+  @@index([entity, entityId])
+  @@map("audit_log")
+}

@@ -1,0 +1,28 @@
+{
+  "descripcion": "Vectores compartidos de reglas de escaneo. Fuente única para servidor (TS) y PDA (Kotlin). CI corre ambos contra este archivo.",
+  "maestro": [
+    { "sku": "CH4002", "codigos": ["7804659070710", "128-CH4002"] },
+    { "sku": "BE0142", "codigos": ["07800001112223"] },
+    { "sku": "AR0082", "codigos": ["22 AR0082"] },
+    { "sku": "1008",   "codigos": ["6-1008", "17 - 125"] },
+    { "sku": "PR0300", "codigos": ["7801234567890"] },
+    { "sku": "CL0001", "codigos": ["9999999999999"] },
+    { "sku": "CL0002", "codigos": ["9999999999999"] }
+  ],
+  "surtido": ["CH4002", "AR0082", "1008"],
+  "casos": [
+    { "nombre": "EAN en surtido",                 "modo": "CON_SURTIDO", "scan": "7804659070710", "esperado": "RECIBIDO_ESPERADO" },
+    { "nombre": "Codigo alterno mismo SKU",       "modo": "CON_SURTIDO", "scan": "128-CH4002",    "esperado": "RECIBIDO_ESPERADO" },
+    { "nombre": "Espacio separador (22 AR0082)",  "modo": "CON_SURTIDO", "scan": "22 AR0082",     "esperado": "RECIBIDO_ESPERADO" },
+    { "nombre": "Espacios alrededor de guion",    "modo": "CON_SURTIDO", "scan": "17 - 125",      "esperado": "RECIBIDO_ESPERADO" },
+    { "nombre": "Espacios extremos",              "modo": "CON_SURTIDO", "scan": " 6-1008 ",      "esperado": "RECIBIDO_ESPERADO" },
+    { "nombre": "Cero inicial fuera de surtido",  "modo": "CON_SURTIDO", "scan": "07800001112223","esperado": "SOBRANTE_NO_SOLICITADO" },
+    { "nombre": "En maestro fuera de surtido",    "modo": "CON_SURTIDO", "scan": "7801234567890", "esperado": "SOBRANTE_NO_SOLICITADO" },
+    { "nombre": "Inexistente en maestro",         "modo": "CON_SURTIDO", "scan": "1234567890123", "esperado": "CODIGO_NO_IDENTIFICADO" },
+    { "nombre": "QR / URL",                       "modo": "CON_SURTIDO", "scan": "https://qrco.de/x", "esperado": "LECTURA_INVALIDA" },
+    { "nombre": "Texto libre",                    "modo": "CON_SURTIDO", "scan": "PRODUCTO XYZ",  "esperado": "LECTURA_INVALIDA" },
+    { "nombre": "Conflicto codigo -> 2 SKU",      "modo": "CON_SURTIDO", "scan": "9999999999999", "esperado": "CONFLICTO_MAESTRO" },
+    { "nombre": "Sin surtido: identificado",      "modo": "SIN_SURTIDO", "scan": "7804659070710", "esperado": "RECIBIDO_ESPERADO" },
+    { "nombre": "Sin surtido: desconocido",       "modo": "SIN_SURTIDO", "scan": "00000000",      "esperado": "CODIGO_NO_IDENTIFICADO" }
+  ]
+}

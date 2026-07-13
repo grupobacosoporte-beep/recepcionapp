@@ -1,0 +1,69 @@
+import cl.grupobaco.recepcion.core.CodeNormalizer
+
+data class MaestroEntry(val sku: String, val codigos: List<String>)
+data class Caso(val nombre: String, val modo: String, val scan: String, val esperado: String)
+
+fun buildCatalog(entries: List<MaestroEntry>): Pair<Map<String,String>, Set<String>> {
+    val codeToSku = HashMap<String,String>()
+    val conflicted = HashSet<String>()
+    for (e in entries) {
+        val sku = e.sku.trim(); if (sku.isEmpty()) continue
+        for (raw in e.codigos) {
+            val norm = CodeNormalizer.normalize(raw); if (norm.isEmpty()) continue
+            if (norm in conflicted) continue
+            val prev = codeToSku[norm]
+            if (prev == null) codeToSku[norm] = sku
+            else if (prev != sku) { conflicted.add(norm); codeToSku.remove(norm) }
+        }
+    }
+    return Pair(codeToSku, conflicted)
+}
+
+fun classify(raw: String, cat: Map<String,String>, conf: Set<String>, surtido: Set<String>, modo: String): String {
+    if (CodeNormalizer.preValidate(raw) is CodeNormalizer.Validation.Invalid) return "LECTURA_INVALIDA"
+    val norm = CodeNormalizer.normalize(raw)
+    if (norm in conf) return "CONFLICTO_MAESTRO"
+    val sku = cat[norm] ?: return "CODIGO_NO_IDENTIFICADO"
+    if (modo == "SIN_SURTIDO") return "RECIBIDO_ESPERADO"
+    if (sku in surtido) return "RECIBIDO_ESPERADO"
+    return "SOBRANTE_NO_SOLICITADO"
+}
+
+fun main() {
+    val maestro = listOf(
+        MaestroEntry("CH4002", listOf("7804659070710", "128-CH4002")),
+        MaestroEntry("BE0142", listOf("07800001112223")),
+        MaestroEntry("AR0082", listOf("22 AR0082")),
+        MaestroEntry("1008", listOf("6-1008", "17 - 125")),
+        MaestroEntry("PR0300", listOf("7801234567890")),
+        MaestroEntry("CL0001", listOf("9999999999999")),
+        MaestroEntry("CL0002", listOf("9999999999999"))
+    )
+    val surtido = setOf("CH4002", "AR0082", "1008")
+    val casos = listOf(
+        Caso("EAN en surtido", "CON_SURTIDO", "7804659070710", "RECIBIDO_ESPERADO"),
+        Caso("Codigo alterno mismo SKU", "CON_SURTIDO", "128-CH4002", "RECIBIDO_ESPERADO"),
+        Caso("Espacio separador (22 AR0082)", "CON_SURTIDO", "22 AR0082", "RECIBIDO_ESPERADO"),
+        Caso("Espacios alrededor de guion", "CON_SURTIDO", "17 - 125", "RECIBIDO_ESPERADO"),
+        Caso("Espacios extremos", "CON_SURTIDO", " 6-1008 ", "RECIBIDO_ESPERADO"),
+        Caso("Cero inicial fuera de surtido", "CON_SURTIDO", "07800001112223", "SOBRANTE_NO_SOLICITADO"),
+        Caso("En maestro fuera de surtido", "CON_SURTIDO", "7801234567890", "SOBRANTE_NO_SOLICITADO"),
+        Caso("Inexistente en maestro", "CON_SURTIDO", "1234567890123", "CODIGO_NO_IDENTIFICADO"),
+        Caso("QR / URL", "CON_SURTIDO", "https://qrco.de/x", "LECTURA_INVALIDA"),
+        Caso("Texto libre", "CON_SURTIDO", "PRODUCTO XYZ", "LECTURA_INVALIDA"),
+        Caso("Conflicto codigo -> 2 SKU", "CON_SURTIDO", "9999999999999", "CONFLICTO_MAESTRO"),
+        Caso("Sin surtido: identificado", "SIN_SURTIDO", "7804659070710", "RECIBIDO_ESPERADO"),
+        Caso("Sin surtido: desconocido", "SIN_SURTIDO", "00000000", "CODIGO_NO_IDENTIFICADO")
+    )
+    val (cat, conf) = buildCatalog(maestro)
+    var pass = 0; var fail = 0
+    for (c in casos) {
+        val got = classify(c.scan, cat, conf, surtido, c.modo)
+        val ok = got == c.esperado
+        println((if (ok) "OK  " else "FAIL") + " | " + c.nombre.padEnd(32) + " -> " + got)
+        if (ok) pass++ else fail++
+    }
+    println("")
+    println("Kotlin: " + pass + "/" + (pass+fail) + " casos OK")
+    if (fail > 0) kotlin.system.exitProcess(1)
+}
