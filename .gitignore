@@ -1,0 +1,8 @@
+node_modules/
+.next/
+.turbo/
+package-lock.json
+yarn.lock
+.env
+.env.local
+*.log
