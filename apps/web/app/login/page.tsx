@@ -26,7 +26,9 @@ export default function LoginPage() {
     try {
       setLoading(true);
 
-      const emailInterno = `${usuarioLimpio}@baco.local`;
+      const emailInterno = usuarioLimpio.includes("@")
+      ? usuarioLimpio
+      : `${usuarioLimpio}@baco.local`;
 
       const { error } = await supabase.auth.signInWithPassword({
         email: emailInterno,
