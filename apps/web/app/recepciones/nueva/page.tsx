@@ -14,7 +14,8 @@ export default function NuevaRecepcion() {
     setBusy(true);
     const fd = new FormData();
     fd.append("number", number);
-    fd.append("branchId", "11111111-1111-4111-8111-111111111111");    fd.append("surtido", file);
+    fd.append("branchId", "11111111-1111-4111-8111-111111111111");
+    fd.append("surtido", file);
     try {
       const r: any = await apiPostForm("/receptions", fd);
       router.push(`/recepciones/${r.id}`);
