@@ -22,7 +22,9 @@ export function withAuth(handler: Handler) {
     } catch (e) {
       if (e instanceof AuthError) return error(e.status, "forbidden", e.message);
       console.error(e);
-      return error(500, "internal", "Error interno");
+      // TEMPORAL (diagnóstico): expone el error real. REVERTIR después.
+      const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      return error(500, "internal", detail);
     }
   };
 }
