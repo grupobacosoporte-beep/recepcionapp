@@ -4,7 +4,6 @@ import { json, error, withAuth } from "@/lib/http";
 import { requirePermission } from "@/lib/auth/guard";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { parseSurtido } from "@/modules/reception/pdfParser";
-
 // GET /api/v1/receptions  — lista con filtros y ámbito de local
 export const GET = withAuth(async (req, ctx) => {
   requirePermission(ctx, PERMISSIONS.RECEPTION_VIEW);
@@ -18,7 +17,6 @@ export const GET = withAuth(async (req, ctx) => {
   const items = await db.reception.findMany({ where, orderBy: { createdAt: "desc" } });
   return json(items);
 });
-
 // POST /api/v1/receptions — crea recepción subiendo el PDF de surtido
 export const POST = withAuth(async (req: NextRequest, ctx) => {
   const form = await req.formData();
@@ -26,14 +24,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   const number = String(form.get("number") ?? "");
   const supplierId = (form.get("supplierId") as string) || null;
   const file = form.get("surtido") as File | null;
-
   requirePermission(ctx, PERMISSIONS.RECEPTION_CREATE, branchId);
   if (!branchId || !number || !file) return error(400, "bad_request", "Faltan branchId, number o surtido");
-
   const buffer = Buffer.from(await file.arrayBuffer());
   const surtido = await parseSurtido(buffer);
   const activeMaestro = await db.maestroVersion.findFirst({ where: { active: true }, orderBy: { createdAt: "desc" } });
-
   const reception = await db.$transaction(async (tx) => {
     const r = await tx.reception.create({
       data: { number, branchId, supplierId, status: "PENDIENTE", createdBy: ctx.userId, maestroVersionId: activeMaestro?.id ?? null },
@@ -48,7 +43,6 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     }
     await tx.auditLog.create({ data: { actorUserId: ctx.userId, action: "reception.create", entity: "reception", entityId: r.id, after: { number, branchId, cartones: surtido.cartons.length } } });
     return r;
-  });
-
+  }, { maxWait: 15000, timeout: 60000 });
   return json(reception, 201);
 });
