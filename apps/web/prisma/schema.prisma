@@ -149,6 +149,18 @@ model Product {
   @@map("product")
 }
 
+model ProductPrice {
+  id        String   @id @default(uuid()) @db.Uuid
+  sku       String
+  versionId String   @map("version_id") @db.Uuid
+  salePrice Int      @map("sale_price")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([versionId, sku])
+  @@index([versionId, sku])
+  @@map("product_price")
+}
+
 model MaestroVersion {
   id        String        @id @default(uuid()) @db.Uuid
   label     String
