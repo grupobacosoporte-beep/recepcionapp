@@ -9,8 +9,11 @@ export default function NuevaRecepcion() {
   const [number, setNumber] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
   async function crear() {
     if (!number || !file) return;
+    setErr(null);
     setBusy(true);
     const fd = new FormData();
     fd.append("number", number);
@@ -19,8 +22,13 @@ export default function NuevaRecepcion() {
     try {
       const r: any = await apiPostForm("/receptions", fd);
       router.push(`/recepciones/${r.id}`);
-    } finally { setBusy(false); }
+    } catch (e: any) {
+      setErr(e?.message ?? String(e));
+    } finally {
+      setBusy(false);
+    }
   }
+
   return (
     <Shell>
       <h3>Nueva recepción</h3>
@@ -31,6 +39,9 @@ export default function NuevaRecepcion() {
       <div style={{ marginTop: 16 }}>
         <button onClick={crear} disabled={busy}>{busy ? "Creando…" : "Crear recepción"}</button>
       </div>
+      {err && (
+        <p style={{ marginTop: 12, color: "#b00020" }}>Error: {err}</p>
+      )}
     </Shell>
   );
 }
