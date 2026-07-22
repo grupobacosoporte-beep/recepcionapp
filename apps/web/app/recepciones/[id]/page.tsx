@@ -31,9 +31,27 @@ export default function DetalleRecepcion() {
       )}
       <div style={{ marginTop: 16 }}><button onClick={finalizar}>Finalizar y ver diferencias</button></div>
       {diffs.length > 0 && (
-        <table style={{ marginTop: 16, background: "#fff", width: "100%" }}>
-          <thead><tr><th align="left">SKU</th><th>Tipo</th><th>Cantidad</th></tr></thead>
-          <tbody>{diffs.map((d, i) => (<tr key={i}><td>{d.sku}</td><td>{d.type}</td><td align="center">{d.qty}</td></tr>))}</tbody>
+        <table style={{ marginTop: 16, background: "#fff", width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th align="left">SKU</th>
+              <th align="left">Producto</th>
+              <th>Tipo</th>
+              <th align="center">Cantidad</th>
+              <th align="right">Precio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {diffs.map((d, i) => (
+              <tr key={i}>
+                <td>{d.sku}</td>
+                <td>{d.name ?? "—"}</td>
+                <td align="center">{d.type}</td>
+                <td align="center">{d.qty}</td>
+                <td align="right">{d.price != null ? "$" + d.price.toLocaleString("es-CL") : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       )}
     </Shell>
