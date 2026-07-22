@@ -11,6 +11,7 @@ export const GET = withAuth(async (_req, ctx) => {
 });
 
 // Sube una nueva versión del MAESTRO (CSV) y la marca activa.
+// Carga códigos (maestro_code), nombres (product) y precios (product_price).
 export const POST = withAuth(async (req: NextRequest, ctx) => {
   requirePermission(ctx, PERMISSIONS.MAESTRO_MANAGE);
   const form = await req.formData();
@@ -25,17 +26,31 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   const version = await db.$transaction(async (tx) => {
     await tx.maestroVersion.updateMany({ where: { active: true }, data: { active: false } });
     const v = await tx.maestroVersion.create({ data: { label, active: true, createdBy: ctx.userId } });
-    // inserta en lotes
     const chunk = 1000;
+    // Códigos -> maestro_code
     for (let i = 0; i < parsed.rows.length; i += chunk) {
       await tx.maestroCode.createMany({
         data: parsed.rows.slice(i, i + chunk).map((r) => ({ versionId: v.id, sku: r.sku, barcodeNormalized: r.barcodeNormalized, rawBarcode: r.rawBarcode })),
         skipDuplicates: true,
       });
     }
+    // Nombres -> product (inserta SKUs nuevos; no pisa los existentes)
+    for (let i = 0; i < parsed.products.length; i += chunk) {
+      await tx.product.createMany({
+        data: parsed.products.slice(i, i + chunk).map((p) => ({ sku: p.sku, description: p.name })),
+        skipDuplicates: true,
+      });
+    }
+    // Precios -> product_price (por versión)
+    for (let i = 0; i < parsed.prices.length; i += chunk) {
+      await tx.productPrice.createMany({
+        data: parsed.prices.slice(i, i + chunk).map((p) => ({ versionId: v.id, sku: p.sku, salePrice: p.salePrice })),
+        skipDuplicates: true,
+      });
+    }
     await tx.auditLog.create({ data: { actorUserId: ctx.userId, action: "maestro.import", entity: "maestro_version", entityId: v.id, after: parsed.stats as any } });
     return v;
-  });
+  }, { maxWait: 20000, timeout: 120000 });
 
-  return json({ versionId: version.id, rows: parsed.stats.filas, uniqueCodes: parsed.stats.codigosUnicos, uniqueSkus: parsed.stats.skusUnicos, conflicts: parsed.conflicts }, 201);
+  return json({ versionId: version.id, ...parsed.stats, conflicts: parsed.conflicts }, 201);
 });
